@@ -1,0 +1,20 @@
+{
+  "name": "rias-bot",
+  "version": "1.1.2",
+  "description": "discord.js bot",
+  "main": "src/index.js",
+  "scripts": {
+    "rias": "node src/index.js"
+  },
+  "author": "lxst",
+  "license": "ISC",
+  "dependencies": {
+    "@discordjs/builders": "^1.4.0",
+    "@discordjs/rest": "^1.5.0",
+    "discord-api-types": "^0.37.29",
+    "discord.js": "^14.7.1",
+    "discord.js-collector-utils": "^1.9.1",
+    "dotenv": "^16.0.3",
+    "fs": "^0.0.1-security"
+  }
+}
