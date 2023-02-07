@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require("@discordjs/builders")
-const { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } = require("discord.js")
+const { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ComponentType, Embed } = require("discord.js")
 
 const valorant = require("../../api/valorant")
 const valorant1 = new valorant()
@@ -39,7 +39,6 @@ module.exports = {
             await interaction.deferReply()
 
             const matchHistory = await valorant1.getMatchData(region, user, tagline)
-
             const matchHistoryEmbed = new EmbedBuilder()
                 .setTitle(`Valorant Recent Matches [${user}#${tagline}]`)
                 .setColor("#fa4454")
@@ -56,26 +55,73 @@ module.exports = {
                         .setPlaceholder('Select a match')
                         .setDisabled(state)
                         .addOptions(
-                        matchHistory.data.map(matchCluster => {
-                            const match_data = []
-                            Object.entries(matchCluster.players.all_players).map(([key, val] = entry) =>{
-                                if(val.name.toLowerCase().includes(`${user.toLowerCase()}`) & val.tag.toLowerCase().includes(`${tagline.toLowerCase()}`)){
-                                    match_data.push(val)
-                                }
-                            })
-
-                            return{
-                                label: `${matchCluster.metadata.map} - ${matchCluster.metadata.mode}`,
-                                value: `${matchCluster.metadata.map} ${matchCluster.metadata.mode.replace(/\s/g, "")} ${matchCluster.metadata.game_start} ${matchCluster.metadata.rounds_played} ${matchCluster.metadata.platform} ${matchCluster.metadata.cluster.replace(/\s/g, "")} ${match_data[0].character} ${(match_data[0].stats.kills / match_data[0].stats.deaths).toFixed(2)} ${match_data[0].stats.kills} ${match_data[0].stats.deaths} ${user.replace(/\s/g, "")}#${tagline}`,
-                                description: `Played at ${matchCluster.metadata.game_start_patched}`
+                        matchHistory.data.map(data => {
+                            return {
+                                metadata: data.metadata,
+                                label: `${data.metadata.map} - ${data.metadata.mode}`,
+                                value: `${data.metadata.matchid}`,
+                                description: `Played at ${data.metadata.game_start_patched}`
                             }
-                        })
+                        }).filter(data => data.metadata.mode !== "Custom Game" && data.metadata.mode !== "Deathmatch")
                     )
                 )
             ]
 
-            await interaction.editReply({embeds: [matchHistoryEmbed], components: SelectMenu(false)}).then((setTimeout(() => {
-                interaction.editReply({components: SelectMenu(true)})
-            }, 10000)))
+            const vl_msg = await interaction.editReply({embeds: [matchHistoryEmbed], components: SelectMenu(false)})
+
+            const collector = vl_msg.createMessageComponentCollector({ componentType: ComponentType.StringSelect, time: 15000 })
+            collector.on("collect", async(interaction) => {
+                const [selected] = interaction.values
+
+                const match_data = await matchHistory.data.map(data => {
+                    return{
+                        metadata: data.metadata,
+                        team_a: data.players.red,
+                        team_b: data.players.blue,
+                        teams: data.teams
+                    } 
+                }).filter(data => data.metadata.matchid === `${selected}`)
+
+                const team_a = match_data[0].team_a.map(player => {
+                    return(`Name: ${player.name} \`#${player.tag}\`\n➤ Agent: ${player.character}\n➤ K/D/A: ${player.stats.kills}/${player.stats.deaths}/${player.stats.assists}\n➤ K/D: ${(player.stats.kills / player.stats.deaths).toFixed(2)}\n\n`)
+                })
+
+                const team_b = match_data[0].team_b.map(player => {
+                    return(`Name: ${player.name} \`#${player.tag}\`\n➤ Agent: ${player.character}\n➤ K/D/A: ${player.stats.kills}/${player.stats.deaths}/${player.stats.assists}\n➤ K/D: ${(player.stats.kills / player.stats.deaths).toFixed(2)}\n\n`)
+                })
+            
+                const minutes = Math.round(match_data[0].metadata.game_length / 1000) / 60
+                const seconds = (minutes - minutes.toString().slice(0, 2)) * 60
+
+                const matchEmbed = new EmbedBuilder()
+                .setTitle(`${match_data[0].metadata.map} - ${match_data[0].metadata.mode} (${match_data[0].metadata.region.toUpperCase()})`)
+                .setDescription(`Match Id ${match_data[0].metadata.matchid}`)
+                .setColor("#fa4454")
+                .addFields(
+                    {name: "Match started", value: `<t:${match_data[0].metadata.game_start}:t>`, inline: true},
+                    {name: "Match length", value: `${Math.trunc(minutes)}m ${Math.trunc(seconds)}s`, inline: true},
+                    {name: "Server", value: `${match_data[0].metadata.cluster}`, inline: true},
+                    {name: "Team A Team B", value: `**${match_data[0].teams.red.rounds_won}**  :  **${match_data[0].teams.blue.rounds_won}**`, inline: true},
+                    {name: "Winner", value: `${match_data[0].teams.blue.has_won ? "Team B" : "Team A"}`, inline: true},
+                    {name: "Played rounds", value: `${match_data[0].metadata.rounds_played}`, inline: true},
+                    {name: "Team A", value: `${team_a.join("")}`, inline: true},
+                    {name: "\u200b", value: `\u200b`, inline: true},
+                    {name: "Team B", value: `${team_b.join("")}`, inline: true},
+                )
+
+                try{
+                    await interaction.update({embeds: [matchEmbed]})
+                } catch{
+                    const errorEmbed = new EmbedBuilder()
+                    .setTitle("Error")
+                    .setColor("Red")
+                    .setDescription("An error occured while updating message")
+                    await interaction.update({embeds: [errorEmbed], ephemeral: true, components: SelectMenu(true)})
+                }
+            })
+
+            collector.on("end", async() => {
+                await interaction.editReply({components: SelectMenu(true)})
+            })
         }
 }
