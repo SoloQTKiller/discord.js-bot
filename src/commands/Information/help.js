@@ -49,16 +49,13 @@ module.exports = {
         const msg = await interaction.reply({embeds: [Embed], components: SelectMenu(false), ephemeral: true})
 
         const collector = msg.createMessageComponentCollector({ componentType: ComponentType.StringSelect, time: 15000 });
-        collector.on('collect', async(interaction) => {
-            if(!interaction.isStringSelectMenu()) return;
-            if(interaction.customId != "help-menu") return;
-
+        collector.on("collect", async(interaction) => {
             const [selected] = interaction.values
             
             const category_cmds = fs.readdirSync(`./src/commands/${selected}/`).filter(file => file.endsWith(".js"))
         
             const categoryEmbed = new EmbedBuilder()
-            .setTitle(selected)
+            .setTitle(`${Emojis[selected]}・${selected}`)
             .setColor("#fa4454")
             .addFields(category_cmds.map(cmd => {
                 const cmdData = require(`../../commands/${selected}/${cmd}`)
@@ -77,12 +74,12 @@ module.exports = {
                 .setTitle("Error")
                 .setColor("Red")
                 .setDescription("An error occured while updating message")
-                interaction.update({embeds: [errorEmbed], ephemeral: true, components: SelectMenu(true)})
+                await interaction.update({embeds: [errorEmbed], ephemeral: true, components: SelectMenu(true)})
             }
         })
 
-        collector.on('end', async() => {
-            interaction.editReply({components: SelectMenu(true)})
+        collector.on("end", async() => {
+            await interaction.editReply({components: SelectMenu(true)})
         })
     }
 }
